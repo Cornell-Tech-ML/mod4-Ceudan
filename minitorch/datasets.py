@@ -5,6 +5,7 @@ from typing import List, Tuple
 
 
 def make_pts(N: int) -> List[Tuple[float, float]]:
+    """Generate N random 2-dimensional points in a unit square"""
     X = []
     for i in range(N):
         x_1 = random.random()
@@ -21,6 +22,16 @@ class Graph:
 
 
 def simple(N: int) -> Graph:
+    """Create a simple set of datapoints and labels
+
+    Inputs:
+        N (int): the number of datapoints to generate
+
+    Returns
+    -------
+        Graph: an object containing datapoints and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -30,6 +41,16 @@ def simple(N: int) -> Graph:
 
 
 def diag(N: int) -> Graph:
+    """Create a diagonal set of datapoints and labels
+
+    Inputs:
+        N (int): the number of datapoints to generate
+
+    Returns
+    -------
+        Graph: an object containing datapoints and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -39,6 +60,16 @@ def diag(N: int) -> Graph:
 
 
 def split(N: int) -> Graph:
+    """Creates a dataset where the points of one class lie inbetween the points of the other class
+
+    Inputs:
+        N (int): the number of datapoints to generate
+
+    Returns
+    -------
+        Graph: an object containing datapoints and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -48,6 +79,16 @@ def split(N: int) -> Graph:
 
 
 def xor(N: int) -> Graph:
+    """Creates a dataset where divided into four quadrants, the points of one class lie in two opposite quadrants
+
+    Inputs:
+        N (int): the number of datapoints to generate
+
+    Returns
+    -------
+        Graph: an object containing datapoints and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -57,6 +98,16 @@ def xor(N: int) -> Graph:
 
 
 def circle(N: int) -> Graph:
+    """Creates a dataset whith 2 classes corresponding to points inside and outside of a circle
+
+    Inputs:
+        N (int): the number of datapoints to generate
+
+    Returns
+    -------
+        Graph: an object containing datapoints and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -67,6 +118,17 @@ def circle(N: int) -> Graph:
 
 
 def spiral(N: int) -> Graph:
+    """Creates a dataset with 2 classes corresponding to points on and off a spiral
+
+    Inputs:
+        N (int): the number of datapoints to generate
+
+    Returns
+    -------
+        Graph: an object containing datapoints and their corresponding labels
+
+    """
+
     def x(t: float) -> float:
         return t * math.cos(t) / 20.0
 

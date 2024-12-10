@@ -11,6 +11,37 @@ def RParam(*shape):
     r = 2 * (minitorch.rand(shape) - 0.5)
     return minitorch.Parameter(r)
 
+# TODO: Implement for Task 2.5.
+class Network(minitorch.Module):
+    def __init__(self, hidden):
+        super().__init__()
+        self.hidden = hidden
+        self.layer1 = LinearLayer(2, hidden)
+        self.layer2 = LinearLayer(hidden, hidden)
+        self.layer3 = LinearLayer(hidden, 1)
+
+    def forward(self, inputs):
+        # z1 = self.layer1.forward(inputs).relu()
+        # z2 = self.layer2.forward(z1).relu()
+        z1 = self.layer1.forward(inputs).sigmoid()
+        z2 = self.layer2.forward(z1).sigmoid()
+        z3 = self.layer3.forward(z2).sigmoid()
+        return z3
+
+class LinearLayer(minitorch.Module):
+    def __init__(self, in_size, out_size):
+        super().__init__()
+        self.weights = RParam(in_size, out_size)
+        self.bias = RParam(out_size)
+
+    def forward(self, inputs):
+        inputs = inputs.view(*inputs.shape, 1)
+        in_mul_weights = inputs * self.weights.value
+        in_mul_weights_sum = in_mul_weights.sum(1)
+        in_mul_weights_add_bias = in_mul_weights_sum + self.bias.value
+        result = in_mul_weights_add_bias.view(in_mul_weights_add_bias.shape[0], in_mul_weights_add_bias.shape[2])
+        return result
+
 
 def default_log_fn(epoch, total_loss, correct, losses):
     print("Epoch ", epoch, " loss ", total_loss, "correct", correct)
@@ -63,7 +94,8 @@ class TensorTrain:
 
 if __name__ == "__main__":
     PTS = 50
-    HIDDEN = 2
+    HIDDEN = 5
     RATE = 0.5
+    MAX_EPOCHS = 1
     data = minitorch.datasets["Simple"](PTS)
-    TensorTrain(HIDDEN).train(data, RATE)
+    TensorTrain(HIDDEN).train(data=data, learning_rate=RATE,max_epochs=MAX_EPOCHS)

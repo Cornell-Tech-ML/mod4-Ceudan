@@ -1,0 +1,1 @@
+python -m debugpy --listen 5677 --wait-for-client -m pytest -m task3_2 tests/test_tensor_general.py
