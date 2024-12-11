@@ -1,5 +1,8 @@
 from numba import njit
 
+# import sys
+# sys.path.append('..')
+
 import minitorch
 import minitorch.fast_ops
 

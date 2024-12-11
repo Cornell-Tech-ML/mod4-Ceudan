@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# from re import M
+# from tkinter.tix import MAX
 from typing import TYPE_CHECKING, TypeVar, Any
 
 import numpy as np
@@ -80,6 +82,7 @@ class FastOps(TensorOps):
             # Other values when not sum.
             out = a.zeros(tuple(out_shape))
             out._tensor._storage[:] = start
+            # print("in",a,"out",out,"dim",dim,"fn",fn)
 
             f(*out.tuple(), *a.tuple(), dim)
             return out
@@ -168,7 +171,28 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        # TODO: Implement for Task 3.1.
+        if not (len(out_shape) <= MAX_DIMS and len(in_shape) <= MAX_DIMS):
+            raise ValueError("Shapes exceed maximum dimensions.")
+
+        if (
+            len(out_shape) == len(in_shape)
+            and (out_shape == in_shape).all()
+            and (out_strides == in_strides).all()
+        ):
+            # If strides are the same, we can avoid indexing
+            for i in prange(len(out)):
+                out[i] = fn(in_storage[i])
+                # out[i] += 1
+        else:
+            for out_pos in prange(len(out)):
+                out_ind = np.empty(MAX_DIMS, dtype=np.int32)
+                in_ind = np.empty(MAX_DIMS, dtype=np.int32)
+                to_index(out_pos, out_shape, out_ind)
+                broadcast_index(out_ind, out_shape, in_shape, in_ind)
+                in_pos = index_to_position(in_ind, in_strides)
+                out[out_pos] = fn(in_storage[in_pos])
+                # out[out_pos] += 1 # FIX THIS FN IT HAS PARRALELIZATION ISSUE
 
     return njit(_map, parallel=True)  # type: ignore
 
@@ -207,7 +231,39 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        # TODO: Implement for Task 3.1.
+        # avoid repeated initializations
+        if not (
+            len(out_shape) <= MAX_DIMS
+            and len(a_shape) <= MAX_DIMS
+            and len(b_shape) <= MAX_DIMS
+        ):
+            raise ValueError("Shapes exceed maximum dimensions.")
+
+        if (
+            len(out_shape) == len(a_shape)
+            and len(out_shape) == len(b_shape)
+            and (out_strides == a_strides).all()
+            and (out_shape == a_shape).all()
+            and (out_strides == b_strides).all()
+            and (out_shape == b_shape).all()
+        ):
+            # If pos order is the same, we can avoid indexing
+            for i in prange(len(out)):
+                out[i] = fn(a_storage[i], b_storage[i])
+        else:
+            # we have to do some index conversions
+            # iterate over output elements in out_storage, and find appropriate input from a_storage and b_storage
+            for out_pos in prange(len(out)):
+                out_ind = np.empty(MAX_DIMS, dtype=np.int32)
+                a_ind = np.empty(MAX_DIMS, dtype=np.int32)
+                b_ind = np.empty(MAX_DIMS, dtype=np.int32)
+                to_index(out_pos, out_shape, out_ind)
+                broadcast_index(out_ind, out_shape, a_shape, a_ind)
+                broadcast_index(out_ind, out_shape, b_shape, b_ind)
+                a_pos = index_to_position(a_ind, a_strides)
+                b_pos = index_to_position(b_ind, b_strides)
+                out[out_pos] = fn(a_storage[a_pos], b_storage[b_pos])
 
     return njit(_zip, parallel=True)  # type: ignore
 
@@ -242,7 +298,29 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        # TODO: Implement for Task 3.1.
+        if not (len(out_shape) <= MAX_DIMS and len(a_shape) <= MAX_DIMS):
+            raise ValueError("Shapes exceed maximum dimensions.")
+
+        for i in prange(len(out)):
+            # convert out_pos to out_index
+            out_index: Index = np.empty(MAX_DIMS, dtype=np.int32)
+            # size of the dimension to reduce
+            reduce_size = a_shape[reduce_dim]
+            to_index(i, out_shape, out_index)
+            out_pos = index_to_position(
+                out_index, out_strides
+            )  # perhaps we can use i instead ?
+
+            # avoid accumulating in out during the for loop
+            reduce_stride = a_strides[reduce_dim]
+            first_a_pos = index_to_position(out_index, a_strides)
+            res = out[out_pos]  # init result
+            for s in range(reduce_size):
+                a_pos = first_a_pos + s * reduce_stride
+                res = fn(res, float(a_storage[a_pos]))
+            out[out_pos] = res
+            # out[out_pos] = 1234
 
     return njit(_reduce, parallel=True)  # type: ignore
 
@@ -290,10 +368,50 @@ def _tensor_matrix_multiply(
         None : Fills in `out`
 
     """
+    # assert a_shape[-1] == b_shape[-2], "a_shape[-1] != b_shape[-2]"
+    # a_batch_stride = a_strides[0] if a_shape[0] > 1 else 0
+    # b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
+
+    # TODO: Implement for Task 3.2.
+    assert a_shape[-1] == b_shape[-2], "a_shape[-1] != b_shape[-2]"
     a_batch_stride = a_strides[0] if a_shape[0] > 1 else 0
     b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
+    out_batch_stride = out_strides[0] if out_shape[0] > 1 else 0
+    for batch in prange(out_shape[0]):
+        batch_idx_a = batch * a_batch_stride
+        batch_idx_b = batch * b_batch_stride
+        out_batch_idx = batch * out_batch_stride
+        for r in range(out_shape[-2]):
+            for c in range(out_shape[-1]):
+                acc = 0.0
+                for i in range(a_shape[-1]):  # want to do the inner loop before col
+                    # like BLAS implementation to be more cache friendly,
+                    # but this causes global writes
+                    acc += (
+                        a_storage[batch_idx_a + r * a_strides[-2] + i * a_strides[-1]]
+                        * b_storage[batch_idx_b + i * b_strides[-2] + c * b_strides[-1]]
+                    )
+                out[out_batch_idx + r * out_strides[-2] + c * out_strides[-1]] = acc
+    # a needs at least 1 dims and b needs at least 2 dims
+    # if(len(a_shape)<1 or len(b_shape)<2):
+    #     raise ValueError("Invalid shapes for matrix multiplication.")
+    # # check i a rows length matches b col length
+    # if(a_shape[-1]!=b_shape[-2]):
+    #     raise ValueError("Shapes do not match for matrix multiplication.")
 
-    raise NotImplementedError("Need to include this file from past assignment.")
+    # # we need the batch strides to jump across batches in memory
+    # o_batch_stride = out_strides[0] if out_shape[0] > 1 else 0
+
+    # for b_num in prange(out_shape[0]): # all the matrices should have the same batch size
+    #     b_idx_a = b_num * a_batch_stride
+    #     b_idx_b = b_num * b_batch_stride
+    #     b_idx_o = b_num * o_batch_stride
+    #     for r in range(out_shape[-2]): # iterate over rows of a
+    #         for c in range(out_shape[-1]): # iterate over cols of b
+    #             sum = 0.0
+    #             for i in range(a_shape[-1]):  # iterate over len(row[i])==len(col[i])
+    #                 sum += (a_storage[b_idx_a + r * a_strides[-2] + i * a_strides[-1]] * b_storage[b_idx_b + i * b_strides[-2] + c * b_strides[-1]])
+    #             out[b_idx_o + r * out_strides[-2] + c * out_strides[-1]] = sum # store results
 
 
 tensor_matrix_multiply = njit(_tensor_matrix_multiply, parallel=True)

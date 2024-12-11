@@ -1,14 +1,11 @@
 from typing import Tuple, TypeVar, Any
 
-import numpy as np
 from numba import prange
 from numba import njit as _njit
 
 from .autodiff import Context
 from .tensor import Tensor
 from .tensor_data import (
-    MAX_DIMS,
-    Index,
     Shape,
     Strides,
     Storage,
@@ -87,11 +84,40 @@ def _tensor_conv1d(
         and in_channels == in_channels_
         and out_channels == out_channels_
     )
-    s1 = input_strides
-    s2 = weight_strides
 
     # TODO: Implement for Task 4.1.
-    raise NotImplementedError("Need to implement for Task 4.1")
+    for bind in prange(batch_):
+        # save to local thread
+        s1 = input_strides
+        s2 = weight_strides
+        # iterate over each output
+        for oc_ind in range(out_channels):
+            for ow_ind in range(out_width):
+                # now we are calculating the output value of a particular output
+                oval = 0.0  # accucmulated value
+                for ic_ind in range(in_channels):
+                    for kw_ind in range(kw):
+                        if reverse:
+                            in_pos = ow_ind - kw + 1 + kw_ind
+                        else:
+                            in_pos = ow_ind + kw_ind
+                        if 0 <= in_pos < width:
+                            # in pos is jumpy by batch number, jump by in_channel number, jump by position in kernel
+                            input_index = (
+                                (bind * s1[0]) + (ic_ind * s1[1]) + (in_pos * s1[2])
+                            )
+                            # weight index is jumpy by out_channel number, jump by in_channel number, jump by position in kernel
+                            weight_index = (
+                                (oc_ind * s2[0]) + (ic_ind * s2[1]) + (kw_ind * s2[2])
+                            )
+                            oval += input[input_index] * weight[weight_index]
+
+                out_index = (
+                    (bind * out_strides[0])
+                    + (oc_ind * out_strides[1])
+                    + (ow_ind * out_strides[2])
+                )
+                out[out_index] = oval
 
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
@@ -203,7 +229,12 @@ def _tensor_conv2d(
         reverse (bool): anchor weight at top-left or bottom-right
 
     """
-    batch_, out_channels, _, _ = out_shape
+    # batch_, out_channels, _, _ = out_shape
+    # batch, in_channels, height, width = input_shape
+    # out_channels_, in_channels_, kh, kw = weight_shape
+
+    # I took more info from the outshape.
+    batch_, out_channels, out_nrows, out_ncols = out_shape
     batch, in_channels, height, width = input_shape
     out_channels_, in_channels_, kh, kw = weight_shape
 
@@ -215,12 +246,52 @@ def _tensor_conv2d(
 
     s1 = input_strides
     s2 = weight_strides
-    # inners
-    s10, s11, s12, s13 = s1[0], s1[1], s1[2], s1[3]
-    s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
+    # I renamed the varibales for interpretability
+    # input_strides_batch, input_strides_channel, input_strides_row, input_strides_column
+    isb, isc, isr, isc = s1[0], s1[1], s1[2], s1[3]
+    wsoc, wsic, wsr, wsc = s2[0], s2[1], s2[2], s2[3]
+    osb, osc, osr, osc = out_strides
 
     # TODO: Implement for Task 4.2.
-    raise NotImplementedError("Need to implement for Task 4.2")
+    # we manually iterate over the output indices in the output tensor
+    # and then go over the input tensor and add them
+    for bi in prange(batch):
+        for oci in range(out_channels):
+            for ohi in range(out_nrows):
+                for owi in range(out_ncols):
+                    out_val = 0.0  # output value at this particular index
+                    # now we iterate over positions in the input matrix in the receptive field of this output position
+                    for ici in range(in_channels):
+                        for kri in range(kh):
+                            for kci in range(kw):
+                                if reverse:
+                                    iri = ohi - kh + 1 + kri
+                                    icoi = owi - kw + 1 + kci
+                                else:
+                                    iri = ohi + kri
+                                    icoi = owi + kci
+
+                                # actually we have no padding so just ignore out of bounds computations
+                                if 0 <= iri < height and 0 <= icoi < width:
+                                    # get the "real" position in the tensors
+                                    input_idx = (
+                                        (bi * isb)
+                                        + (ici * isc)
+                                        + (iri * isr)
+                                        + (icoi * isc)
+                                    )
+                                    weight_idx = (
+                                        (oci * wsoc)
+                                        + (ici * wsic)
+                                        + (kri * wsr)
+                                        + (kci * wsc)
+                                    )
+                                    # dot product
+                                    out_val += input[input_idx] * weight[weight_idx]
+
+                    # Compute flat index for the output tensor and store result
+                    out_idx = bi * osb + oci * osc + ohi * osr + owi * osc
+                    out[out_idx] = out_val
 
 
 tensor_conv2d = njit(_tensor_conv2d, parallel=True, fastmath=True)

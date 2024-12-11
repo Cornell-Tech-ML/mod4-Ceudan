@@ -86,7 +86,7 @@ class Scalar:
         return bool(self.data)
 
     def __radd__(self, b: ScalarLike) -> Scalar:
-        return self + b
+        return self + b  # FIX THIS ASSIGNMENT ERROR LATER
 
     def __rmul__(self, b: ScalarLike) -> Scalar:
         return self * b
@@ -112,21 +112,34 @@ class Scalar:
         return self.history is not None and self.history.last_fn is None
 
     def is_constant(self) -> bool:
+        """True if this variable is a constant (no history)"""
         return self.history is None
 
     @property
     def parents(self) -> Iterable[Variable]:
-        """Get the variables used to create this one."""
+        """Returns the parents of this variable in the computation graph."""
         assert self.history is not None
         return self.history.inputs
 
     def chain_rule(self, d_output: Any) -> Iterable[Tuple[Variable, Any]]:
+        """Computes the derivate of this variable with respect to its inputs in its last function call, multiplied by `d_output`."""
         h = self.history
         assert h is not None
         assert h.last_fn is not None
         assert h.ctx is not None
 
-        raise NotImplementedError("Need to include this file from past assignment.")
+        # TODO: Implement for Task 1.3.
+        # dloss_dx = h.last_fn._backward(h.ctx, d_output)
+        # last_inputs = h.inputs
+        # # for i, x in enumerate(last_inputs):
+        # #     x.accumulate_derivative(dloss_dx[i])
+        # #     yield x, dloss_dx[i]
+        # dloss_dx_formatted = []
+        # for i, x in enumerate(last_inputs):
+        #     dloss_dx_formatted.append((x, dloss_dx[i]))
+        # return dloss_dx_formatted
+        x = h.last_fn._backward(h.ctx, d_output)
+        return list(zip(h.inputs, x))
 
     def backward(self, d_output: Optional[float] = None) -> None:
         """Calls autodiff to fill in the derivatives for the history of this object.
@@ -141,15 +154,54 @@ class Scalar:
             d_output = 1.0
         backpropagate(self, d_output)
 
-    raise NotImplementedError("Need to include this file from past assignment.")
+    # TODO: Implement for Task 1.2.
+    def __lt__(self, other: ScalarLike) -> Scalar:
+        """Override the less than operator."""
+        return LT.apply(self, other)
+
+    def __gt__(self, other: ScalarLike) -> Scalar:
+        """Override the greater than operator."""
+        return LT.apply(other, self)
+
+    def __sub__(self, other: ScalarLike) -> Scalar:
+        """Override the subtraction operator."""
+        return Add.apply(self, Neg.apply(other))
+
+    def __neg__(self) -> Scalar:
+        """Override the negation operator."""
+        return Neg.apply(self)
+
+    def __add__(self, other: ScalarLike) -> Scalar:
+        """Override the addition operator."""
+        return Add.apply(self, other)
+
+    def __eq__(self, other: ScalarLike) -> Scalar:
+        """Override the equality operator."""
+        return EQ.apply(self, other)
+
+    def log(self) -> Scalar:
+        """Applies the natural logarithm class function to the scalar."""
+        return Log.apply(self)
+
+    def exp(self) -> Scalar:
+        """Applies the exponential class function to the scalar."""
+        return Exp.apply(self)
+
+    def sigmoid(self) -> Scalar:
+        """Applies the sigmoid class function to the scalar."""
+        return Sigmoid.apply(self)
+
+    def relu(self) -> Scalar:
+        """Applies the ReLU class function to the scalar."""
+        return ReLU.apply(self)
 
 
 def derivative_check(f: Any, *scalars: Scalar) -> None:
     """Checks that autodiff works on a python function.
     Asserts False if derivative is incorrect.
 
-    Parameters
-    ----------
+    Arguments:
+    ---------
         f : function from n-scalars to 1-scalar.
         *scalars  : n input scalar values.
 
