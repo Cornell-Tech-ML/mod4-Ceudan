@@ -35,7 +35,10 @@ class Conv1d(minitorch.Module):
 
     def forward(self, input):
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
+        out = minitorch.conv1d(input, self.weights.value)
+        out = out + self.bias.value
+        return out
 
 
 class CNNSentimentKim(minitorch.Module):
@@ -62,14 +65,27 @@ class CNNSentimentKim(minitorch.Module):
         super().__init__()
         self.feature_map_size = feature_map_size
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
+        self.convx = Conv1d(embedding_size, feature_map_size, filter_sizes[0])
+        self.convy = Conv1d(embedding_size, feature_map_size, filter_sizes[1])
+        self.convz = Conv1d(embedding_size, feature_map_size, filter_sizes[2])
+        self.linear = Linear(feature_map_size, 1)
+        self.dropout_prob = dropout_prob
 
     def forward(self, embeddings):
         """
         embeddings tensor: [batch x sentence length x embedding dim]
         """
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
+        x = embeddings.permute(0, 2, 1)
+        xx = minitorch.max(self.convx.forward(x).relu(), 2)
+        xy = minitorch.max(self.convy.forward(x).relu(), 2)
+        xz = minitorch.max(self.convz.forward(x).relu(), 2)
+        max_over_time = xx + xy + xz
+        h = self.linear.forward(max_over_time.view(max_over_time.shape[0], max_over_time.shape[1]))
+        h = minitorch.dropout(h, self.dropout_prob, ignore = not self.training)
+        return h.sigmoid().view(embeddings.shape[0])
 
 
 # Evaluation helper methods
@@ -205,16 +221,16 @@ def encode_sentences(
     for sentence in dataset["sentence"][:N]:
         # pad with 0s to max sentence length in order to enable batching
         # TODO: move padding to training code
-        sentence_embedding = [[0] * embeddings_lookup.d_emb] * max_sentence_len
-        for i, w in enumerate(sentence.split()):
-            sentence_embedding[i] = [0] * embeddings_lookup.d_emb
-            if w in embeddings_lookup:
-                sentence_embedding[i][:] = embeddings_lookup.emb(w)
+        embedded_vector = [[0] * embeddings_lookup.dimension] * max_sentence_len
+        for idx, token in enumerate(sentence.split()):
+            embedded_vector[idx] = [0] * embeddings_lookup.dimension
+            if token in embeddings_lookup:
+                embedded_vector[idx][:] = embeddings_lookup.get_embedding(token)
             else:
-                # use random embedding for unks
-                unks.add(w)
-                sentence_embedding[i][:] = unk_embedding
-        Xs.append(sentence_embedding)
+                # Handle unknown words
+                unks.add(token)
+                embedded_vector[idx][:] = unk_embedding
+        Xs.append(embedded_vector)
 
     # load labels
     ys = dataset["label"][:N]
@@ -253,10 +269,10 @@ def encode_sentiment_data(dataset, pretrained_embeddings, N_train, N_val=0):
 
 
 if __name__ == "__main__":
-    train_size = 450
-    validation_size = 100
-    learning_rate = 0.01
-    max_epochs = 250
+    train_size = 440
+    validation_size = 90
+    learning_rate = 0.011
+    max_epochs = 50
 
     (X_train, y_train), (X_val, y_val) = encode_sentiment_data(
         load_dataset("glue", "sst2"),

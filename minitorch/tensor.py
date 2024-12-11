@@ -389,7 +389,7 @@ class Tensor:
     def mean(self, dim: Optional[int] = None) -> Tensor:
         """Compute the mean of the tensor"""
         if dim is not None:
-            return self.sum(dim) / self.size
+            return self.sum(dim) / self.shape[dim]
         else:
             return self.sum() / self.size
 
