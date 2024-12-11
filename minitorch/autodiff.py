@@ -1,7 +1,3 @@
-# from minitorch.scalar import Scalar # commented out to avoid circular import
-# ## Task 1.1
-# Central Difference calculation
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -66,37 +62,6 @@ class Variable(Protocol):
     def chain_rule(self, d_output: Any) -> Iterable[Tuple[Variable, Any]]:
         """Computes the derivate of this variable with respect to its inputs in its last function call, multiplied by `d_output`."""
         ...
-
-
-# def topological_recursion(
-#     variable: Variable, visited: set[int], order: List[Variable]
-# ) -> None:
-#     """Recursively visits all the children of the variable in a topological order.
-
-#     Arguments:
-#     ---------
-#         variable (Variable): The current variable
-#         visited (set[int]): A set of visited variables
-#         order (List[Variable]): The order of the variables to calculate in topological order
-
-#     Returns:
-#     -------
-#         None
-
-#     """
-#     if variable.unique_id in visited:  # already visited
-#         return
-#     visited.add(variable.unique_id)  # mark as visited
-#     # print("VARIABLE", variable)
-#     # print("VARIABLE TYPE", type(variable))
-#     # print("VARIABLE.HISTORY", variable.history)
-#     if variable.history is not None:
-#         children = variable.history.inputs
-#         for child in children:
-#             topological_recursion(child, visited, order)
-#         order.append(variable)
-"""ABOVE WAS MY PERSONAL IMPLEMENTATION"""
-
 
 def topological_sort(variable: Variable) -> Iterable[Variable]:
     """Computes the topological order of the computation graph.
